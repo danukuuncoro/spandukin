@@ -15,12 +15,17 @@ const limitMax = Math.max(1, Number(process.env.AI_RATE_LIMIT_MAX || 30));
 const limitWindowMs = Math.max(60000, Number(process.env.AI_RATE_LIMIT_WINDOW_MS || 86400000));
 
 async function loadIndex() {
-  const dir = join(here, "frontend");
-  const names = (await readdir(dir)).filter(x => x.startsWith("index.html.gz.b64.") && x.endsWith(".part")).sort();
-  if (!names.length) throw new Error("Frontend Spandukin tidak ditemukan.");
-  let encoded = "";
-  for (const name of names) encoded += await readFile(join(dir, name), "utf8");
-  return gunzipSync(Buffer.from(encoded, "base64"));
+  try {
+    const dir = join(here, "frontend");
+    const names = (await readdir(dir)).filter(x => x.startsWith("index.html.gz.b64.") && x.endsWith(".part")).sort();
+    if (!names.length) throw new Error("Frontend belum diunggah.");
+    let encoded = "";
+    for (const name of names) encoded += await readFile(join(dir, name), "utf8");
+    return gunzipSync(Buffer.from(encoded, "base64"));
+  } catch (error) {
+    console.warn(`Frontend lengkap belum siap: ${error.message}`);
+    return Buffer.from(`<!doctype html><html lang="id"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Spandukin Backend</title><style>body{font:16px system-ui;background:#101820;color:#fff;display:grid;place-items:center;min-height:100vh;margin:0}.card{max-width:680px;background:#18232e;padding:28px;border-radius:18px}b{color:#ffcc00}code{background:#0b1117;padding:3px 7px;border-radius:6px}</style><div class="card"><h1>Spandukin</h1><p><b>Backend aktif.</b> Frontend lengkap sedang disinkronkan dari repository.</p><p>Status AI: <code>/api/status</code></p><p>Health check: <code>/healthz</code></p></div></html>`);
+  }
 }
 
 const indexHtml = await loadIndex();
