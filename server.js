@@ -8,9 +8,10 @@ import { dirname, join } from "node:path";
 const here = dirname(fileURLToPath(import.meta.url));
 const port = Number(process.env.PORT || 3000);
 const host = process.env.HOST || "0.0.0.0";
-const model = process.env.OPENAI_MODEL || "gpt-5.6-luna";
-const apiKey = String(process.env.OPENAI_API_KEY || "").trim();
-const timeoutMs = Math.max(1000, Number(process.env.OPENAI_TIMEOUT_MS || 45000));
+const aiProvider = "gemini";
+const model = process.env.GEMINI_MODEL || "gemini-3.1-flash-lite";
+const apiKey = String(process.env.GEMINI_API_KEY || "").trim();
+const timeoutMs = Math.max(1000, Number(process.env.AI_TIMEOUT_MS || process.env.OPENAI_TIMEOUT_MS || 45000));
 const limitMax = Math.max(1, Number(process.env.AI_RATE_LIMIT_MAX || 30));
 const limitWindowMs = Math.max(60000, Number(process.env.AI_RATE_LIMIT_WINDOW_MS || 86400000));
 
@@ -99,10 +100,13 @@ function normalizeConcept(raw) {
 const schema = {
   type: "object",
   properties: {
-    headline: { type: "string" }, slogan: { type: "string" }, products: { type: "string" }, note: { type: "string" },
-    background: { type: "string", pattern: "^#[0-9A-Fa-f]{6}$" },
-    accent: { type: "string", pattern: "^#[0-9A-Fa-f]{6}$" },
-    textColor: { type: "string", pattern: "^#[0-9A-Fa-f]{6}$" }
+    headline: { type: "string", description: "Nama usaha atau kategori utama yang paling menonjol" },
+    slogan: { type: "string", description: "Pesan utama singkat tanpa mengarang promo" },
+    products: { type: "string", description: "Produk atau jasa utama, dipisahkan karakter •" },
+    note: { type: "string", description: "Satu saran layout praktis untuk desainer" },
+    background: { type: "string", description: "Warna latar hex #RRGGBB" },
+    accent: { type: "string", description: "Warna aksen hex #RRGGBB" },
+    textColor: { type: "string", description: "Warna teks hex #RRGGBB" }
   },
   required: ["headline","slogan","products","note","background","accent","textColor"],
   additionalProperties: false
@@ -113,57 +117,69 @@ const instructions = [
   "Keluaran harus ringkas, mudah dibaca dari jarak jauh, kontras, dan realistis untuk dicetak.",
   "Gunakan Bahasa Indonesia kecuali brief jelas meminta bahasa lain.",
   "Jangan mengarang harga, alamat, nomor telepon, diskon, sertifikasi, atau klaim yang tidak ada di brief.",
-  "headline: nama usaha atau kategori utama yang paling menonjol.",
-  "slogan: pesan utama atau promo singkat tanpa mengada-ada.",
-  "products: produk atau jasa utama dipisahkan dengan karakter •.",
-  "note: satu saran layout praktis untuk desainer.",
-  "background, accent, textColor wajib warna hex #RRGGBB dengan kontras yang baik."
+  "Gunakan kode warna hex #RRGGBB untuk background, accent, dan textColor.",
+  "Hasil harus mengikuti schema JSON yang diminta."
 ].join("\n");
 
-function outputText(data) {
+function geminiOutputText(data) {
   if (typeof data?.output_text === "string" && data.output_text.trim()) return data.output_text.trim();
-  for (const item of data?.output || []) for (const part of item?.content || [])
-    if (part?.type === "output_text" && typeof part.text === "string") return part.text.trim();
+  const steps = Array.isArray(data?.steps) ? data.steps : [];
+  for (let i = steps.length - 1; i >= 0; i--) {
+    const step = steps[i];
+    if (step?.type !== "model_output") continue;
+    for (const part of step?.content || []) {
+      if (part?.type === "text" && typeof part.text === "string" && part.text.trim()) return part.text.trim();
+    }
+  }
+  const outputs = Array.isArray(data?.outputs) ? data.outputs : [];
+  for (let i = outputs.length - 1; i >= 0; i--) {
+    if (outputs[i]?.type === "text" && typeof outputs[i].text === "string" && outputs[i].text.trim()) return outputs[i].text.trim();
+  }
   return "";
 }
 
-async function generateConcept(prompt, safetyIdentifier) {
+async function generateConcept(prompt) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   let response;
   try {
-    response = await fetch("https://api.openai.com/v1/responses", {
+    response = await fetch("https://generativelanguage.googleapis.com/v1beta/interactions", {
       method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      headers: { "x-goog-api-key": apiKey, "Content-Type": "application/json" },
       body: JSON.stringify({
         model,
-        store: false,
-        reasoning: { effort: "low" },
-        safety_identifier: safetyIdentifier,
-        instructions,
-        input: prompt,
-        text: { format: { type: "json_schema", name: "spandukin_concept", strict: true, schema } }
+        input: `${instructions}\n\nBrief pengguna:\n${prompt}`,
+        response_format: {
+          type: "text",
+          mime_type: "application/json",
+          schema
+        }
       }),
       signal: controller.signal
     });
   } catch (err) {
-    const e = new Error(err?.name === "AbortError" ? "OpenAI timeout. Coba lagi." : "Backend gagal menghubungi OpenAI.");
+    const e = new Error(err?.name === "AbortError" ? "Gemini timeout. Coba lagi." : "Backend gagal menghubungi Gemini.");
     e.status = err?.name === "AbortError" ? 504 : 502;
     throw e;
   } finally { clearTimeout(timer); }
 
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    const e = new Error(response.status === 401 ? "API key OpenAI ditolak." : response.status === 429 ? "Batas penggunaan OpenAI tercapai. Periksa quota/billing." : data?.error?.message || "Permintaan ke OpenAI gagal.");
+    let message = data?.error?.message || "Permintaan ke Gemini gagal.";
+    if (response.status === 400) message = `Konfigurasi Gemini ditolak: ${message}`;
+    if (response.status === 401 || response.status === 403) message = "API key Gemini ditolak.";
+    if (response.status === 429) message = "Kuota gratis Gemini tercapai. Coba lagi setelah kuota tersedia.";
+    const e = new Error(message);
     e.status = response.status >= 500 ? 502 : response.status;
     throw e;
   }
-  const text = outputText(data);
-  if (!text) { const e = new Error("OpenAI tidak mengembalikan konsep."); e.status = 502; throw e; }
+
+  const text = geminiOutputText(data);
+  if (!text) { const e = new Error("Gemini tidak mengembalikan konsep."); e.status = 502; throw e; }
   let parsed;
   try { parsed = JSON.parse(text); }
   catch { const e = new Error("Format konsep AI tidak valid."); e.status = 502; throw e; }
-  return { concept: normalizeConcept(parsed), model: data.model || model, usage: data.usage || null };
+  return { concept: normalizeConcept(parsed), model: data.model || model, provider: aiProvider, usage: data.usage || data.usageMetadata || null };
 }
 
 const server = http.createServer(async (req, res) => {
@@ -180,10 +196,21 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, { ok: true, service: "spandukin", uptimeSeconds: Math.floor(process.uptime()) });
     }
     if (req.method === "GET" && url.pathname === "/api/status") {
-      return sendJson(res, 200, { ok: true, storage: true, user: "spandukin-railway", openai: Boolean(apiKey), openaiModel: model, aiLimitPerWindow: limitMax, aiLimitWindowMs: limitWindowMs });
+      return sendJson(res, 200, {
+        ok: true,
+        storage: true,
+        user: "spandukin-railway",
+        openai: Boolean(apiKey),
+        openaiModel: model,
+        aiProvider,
+        aiModel: model,
+        aiReady: Boolean(apiKey),
+        aiLimitPerWindow: limitMax,
+        aiLimitWindowMs: limitWindowMs
+      });
     }
     if (req.method === "POST" && url.pathname === "/api/ai") {
-      if (!apiKey) return sendJson(res, 503, { ok: false, requestId, message: "OPENAI_API_KEY belum dipasang pada backend." });
+      if (!apiKey) return sendJson(res, 503, { ok: false, requestId, message: "GEMINI_API_KEY belum dipasang pada backend." });
       const ip = clientIp(req);
       const rate = takeRate(ip);
       res.setHeader("X-RateLimit-Limit", String(limitMax));
@@ -192,8 +219,7 @@ const server = http.createServer(async (req, res) => {
       const body = await readJson(req);
       const prompt = String(body?.prompt ?? "").trim();
       if (prompt.length < 3 || prompt.length > 2000) return sendJson(res, 400, { ok: false, requestId, message: "Brief harus 3–2.000 karakter." });
-      const safety = crypto.createHash("sha256").update(ip).digest("hex").slice(0, 64);
-      const result = await generateConcept(prompt, safety);
+      const result = await generateConcept(prompt);
       return sendJson(res, 200, { ok: true, requestId, ...result });
     }
     return sendJson(res, 404, { ok: false, requestId, message: "Endpoint tidak ditemukan." });
@@ -207,4 +233,4 @@ const server = http.createServer(async (req, res) => {
 server.keepAliveTimeout = 65000;
 server.headersTimeout = 66000;
 server.requestTimeout = 70000;
-server.listen(port, host, () => console.log(`Spandukin aktif di ${host}:${port} | OpenAI ${apiKey ? "aktif" : "belum dikonfigurasi"} | ${model}`));
+server.listen(port, host, () => console.log(`Spandukin aktif di ${host}:${port} | ${aiProvider} ${apiKey ? "aktif" : "belum dikonfigurasi"} | ${model}`));
