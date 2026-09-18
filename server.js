@@ -11,110 +11,7 @@ const port = Number(process.env.PORT || 3000);
 const host = process.env.HOST || '0.0.0.0';
 const api = new ApiManager(process.env);
 
-const testerHtml = Buffer.from(\`<!doctype html>
-<html lang="id">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Spandukin AI Tester</title>
-<style>
-:root{--ink:#101820;--sun:#ffcc00;--green:#0a8f48;--line:#dbe2e7;--muted:#6b7780}
-*{box-sizing:border-box}body{margin:0;font:15px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif;background:#eef2f4;color:var(--ink)}
-.top{background:linear-gradient(135deg,#083c33,#0a6b4a);color:#fff;padding:18px 24px;display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:5}
-.logo{width:44px;height:44px;border-radius:12px;background:var(--sun);display:grid;place-items:center;font-size:24px}.top h1{margin:0;font-size:23px}.top p{margin:2px 0 0;color:#cfe8dc}.status{margin-left:auto;padding:8px 12px;border-radius:999px;background:#ffffff16;border:1px solid #ffffff24;font-weight:700}.status.ok{background:#e3f7ea;color:#17623b}.status.bad{background:#ffe6e8;color:#9c2733}
-.wrap{max-width:1380px;margin:auto;padding:22px;display:grid;grid-template-columns:minmax(360px,520px) 1fr;gap:20px}
-.card{background:#fff;border:1px solid var(--line);border-radius:18px;box-shadow:0 12px 32px #1020300d;padding:20px}.card h2{margin:0 0 4px}.hint{color:var(--muted);margin:0 0 18px}
-.steps{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:16px}.steps span{font-size:12px;background:#f1f5f3;border-radius:999px;padding:5px 8px}.steps b{color:#95a49b}
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:13px}.field{display:grid;gap:6px}.field.full{grid-column:1/-1}.field label{font-weight:800}.field input,.field select,.field textarea{width:100%;border:1px solid #cad4da;border-radius:10px;padding:11px 12px;font:inherit;background:#fff}.field textarea{min-height:88px;resize:vertical}
-.generate{width:100%;border:0;background:linear-gradient(135deg,#0c9c51,#08743f);color:#fff;border-radius:12px;padding:13px 16px;margin-top:16px;font-size:16px;font-weight:900;cursor:pointer}.generate:disabled{opacity:.6;cursor:wait}
-.error{display:none;margin-top:12px;background:#fff0f1;color:#a12531;padding:10px;border-radius:10px}.error.show{display:block}
-.preview-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px}.preview-head small{color:var(--muted)}
-.banner{aspect-ratio:3/1;min-height:220px;border-radius:16px;overflow:hidden;position:relative;display:flex;align-items:center;justify-content:center;text-align:center;padding:28px;background:linear-gradient(135deg,#ffcc00,#ffe96a);box-shadow:inset 0 0 0 1px #0001}.banner:before,.banner:after{content:"";position:absolute;border-radius:50%;background:#07854422}.banner:before{width:260px;height:260px;left:-80px;top:-100px}.banner:after{width:220px;height:220px;right:-70px;bottom:-110px}
-.banner-inner{position:relative;z-index:1;max-width:90%}.headline{font-size:clamp(34px,6vw,78px);font-weight:1000;line-height:.92;text-transform:uppercase;text-shadow:0 3px 0 #fff,0 6px 18px #0003}.slogan{margin:14px 0 8px;font-size:clamp(14px,2vw,24px);font-weight:900}.products{display:inline-block;padding:8px 14px;border-radius:999px;background:#0a8f48;color:#fff;font-weight:800}.contact{position:absolute;right:18px;bottom:15px;z-index:2;background:#fff;padding:8px 13px;border-radius:999px;font-weight:900;box-shadow:0 5px 15px #0002}
-.result{margin-top:16px;border-top:1px solid var(--line);padding-top:14px}.result pre{white-space:pre-wrap;background:#f6f8f9;border-radius:12px;padding:12px;margin:8px 0 0;font:13px/1.55 ui-monospace,monospace}
-.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.actions button{border:1px solid #cbd5db;background:#fff;border-radius:9px;padding:9px 12px;font-weight:700;cursor:pointer}
-@media(max-width:900px){.wrap{grid-template-columns:1fr}.top{flex-wrap:wrap}.status{margin-left:0}.grid{grid-template-columns:1fr}.field.full{grid-column:auto}.banner{min-height:190px}}
-</style>
-</head>
-<body>
-<header class="top"><div class="logo">🏪</div><div><h1>Spandukin AI Tester</h1><p>Tester form terpandu + backend AI Railway</p></div><div id="apiStatus" class="status">Memeriksa AI…</div></header>
-<main class="wrap">
-<section class="card">
-<h2>Asisten AI</h2><p class="hint">Isi data singkat. Tester akan merangkainya menjadi brief untuk AI.</p>
-<div class="steps"><span>Nama Usaha</span><b>→</b><span>Ukuran</span><b>→</b><span>Menu</span><b>→</b><span>Warna</span><b>→</b><span>Gaya</span><b>→</b><span>Kontak</span><b>→</b><span>Generate</span></div>
-<div class="grid">
-<div class="field"><label>1. Nama Usaha</label><input id="name" value="Warkop Udin" maxlength="80"></div>
-<div class="field"><label>2. Ukuran</label><select id="size"><option>3 x 1 meter</option><option>4 x 1 meter</option><option>5 x 1 meter</option><option>2 x 1 meter</option></select></div>
-<div class="field full"><label>3. Menu / Produk</label><textarea id="menu">Kopi, Indomie, Wedang Jahe, Roti Bakar</textarea></div>
-<div class="field"><label>4. Warna</label><select id="color"><option>Kuning dan hijau</option><option>Merah dan kuning</option><option>Biru dan putih</option><option>Hitam dan emas</option><option>Hijau dan putih</option></select></div>
-<div class="field"><label>5. Gaya</label><select id="style"><option>Modern, bersih, mudah dibaca dari jauh</option><option>Warung tradisional yang akrab dan merakyat</option><option>Cerah, ramai, dan kuat untuk promosi</option><option>Minimalis dengan hierarki teks yang jelas</option><option>Premium dan elegan</option><option>Bebas, pilihkan gaya terbaik oleh AI</option></select></div>
-<div class="field full"><label>6. Kontak / WhatsApp</label><input id="contact" value="081311140044" maxlength="120"></div>
-</div>
-<button id="generate" class="generate">✨ Generate Konsep dengan AI</button>
-<div id="error" class="error"></div>
-</section>
-<section class="card">
-<div class="preview-head"><div><h2>Preview Tester</h2><small id="meta">Belum ada hasil AI</small></div></div>
-<div id="banner" class="banner"><div class="banner-inner"><div id="headline" class="headline">WARKOP UDIN</div><div id="slogan" class="slogan">Ngopi, Ngemil, Makin Asik!</div><div id="products" class="products">Kopi • Indomie • Wedang Jahe • Roti Bakar</div></div><div id="contactPreview" class="contact">☎ 081311140044</div></div>
-<div class="result"><strong>Hasil AI</strong><pre id="json">Klik Generate untuk menguji koneksi AI.</pre></div>
-<div class="actions"><button id="copy">Salin Hasil</button><button id="reset">Reset Dummy</button></div>
-</section>
-</main>
-<script>
-(function(){
-const q=id=>document.getElementById(id);
-const status=q('apiStatus'),err=q('error'),btn=q('generate');
-async function check(){
-  try{
-    const r=await fetch('/api/status',{cache:'no-store'}),d=await r.json();
-    if(r.ok&&d.aiReady){status.textContent='● AI Aktif · '+(d.aiModel||d.openaiModel||'');status.className='status ok'}
-    else{status.textContent='● AI belum siap';status.className='status bad'}
-  }catch(e){status.textContent='● Backend gagal';status.className='status bad'}
-}
-function prompt(){
-  return [
-    'Buat konsep spanduk siap desain berdasarkan data berikut:',
-    'Nama Usaha: '+q('name').value.trim(),
-    'Ukuran: '+q('size').value,
-    'Menu / Produk: '+q('menu').value.trim(),
-    'Warna: '+q('color').value,
-    'Gaya: '+q('style').value,
-    'Kontak: '+q('contact').value.trim(),
-    '',
-    'Prioritaskan nama usaha sebagai headline utama, menu mudah terbaca dari jauh, warna kontras, dan tata letak sesuai ukuran spanduk.',
-    'Pertahankan data kontak persis seperti yang diberikan. Jangan mengarang harga, promo, alamat, diskon, atau klaim yang tidak ada.'
-  ].join('\\n');
-}
-function render(c,meta){
-  q('headline').textContent=c.headline||q('name').value;
-  q('slogan').textContent=c.slogan||'';
-  q('products').textContent=c.products||q('menu').value.replace(/,\\s*/g,' • ');
-  q('contactPreview').textContent='☎ '+q('contact').value;
-  const b=q('banner');
-  b.style.background=c.background||'#FFCC00';
-  b.style.color=c.textColor||'#101820';
-  q('products').style.background=c.accent||'#0A8F48';
-  q('json').textContent=JSON.stringify(c,null,2);
-  q('meta').textContent=meta||'Hasil AI aktif';
-}
-btn.addEventListener('click',async()=>{
-  err.className='error';
-  if(!q('name').value.trim()||!q('menu').value.trim()){err.textContent='Nama Usaha dan Menu wajib diisi.';err.className='error show';return}
-  btn.disabled=true;btn.textContent='⏳ Sedang Generate…';
-  try{
-    const r=await fetch('/api/ai',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:prompt()})});
-    const d=await r.json().catch(()=>({}));
-    if(!r.ok)throw new Error(d.message||'Generate gagal');
-    render(d.concept,(d.provider||'AI')+' · '+(d.model||'model'));
-  }catch(e){err.textContent=e.message||'Terjadi kesalahan.';err.className='error show'}
-  finally{btn.disabled=false;btn.textContent='✨ Generate Konsep dengan AI'}
-});
-q('copy').addEventListener('click',()=>navigator.clipboard&&navigator.clipboard.writeText(q('json').textContent));
-q('reset').addEventListener('click',()=>location.reload());
-check();
-})();
-</script>
-</body></html>\`, 'utf8');
+
 
 
 async function loadIndex() {
@@ -309,12 +206,13 @@ const server = http.createServer(async (req, res) => {
 
   try {
     if (req.method === 'GET' && (url.pathname === '/tester' || url.pathname === '/tester/')) {
+      const tester = await readFile(join(here, 'frontend', 'tester.html'));
       res.writeHead(200, {
         'Content-Type': 'text/html; charset=utf-8',
-        'Content-Length': testerHtml.length,
+        'Content-Length': tester.length,
         'Cache-Control': 'no-store, max-age=0'
       });
-      return res.end(testerHtml);
+      return res.end(tester);
     }
 
     if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/index.html')) {
