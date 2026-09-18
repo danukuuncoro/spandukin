@@ -8,24 +8,26 @@ import { dirname, join } from "node:path";
 const here = dirname(fileURLToPath(import.meta.url));
 const port = Number(process.env.PORT || 3000);
 const host = process.env.HOST || "0.0.0.0";
-const aiProvider = "gemini";
-const model = process.env.GEMINI_MODEL || "gemini-3.1-flash-lite";
-const apiKey = String(process.env.GEMINI_API_KEY || "").trim();
-const timeoutMs = Math.max(1000, Number(process.env.AI_TIMEOUT_MS || process.env.OPENAI_TIMEOUT_MS || 45000));
+const aiProvider = "openai";
+const model = process.env.OPENAI_MODEL || "gpt-5.6-luna";
+const apiKey = String(process.env.OPENAI_API_KEY || "").trim();
+const timeoutMs = Math.max(1000, Number(process.env.OPENAI_TIMEOUT_MS || 45000));
 const limitMax = Math.max(1, Number(process.env.AI_RATE_LIMIT_MAX || 30));
 const limitWindowMs = Math.max(60000, Number(process.env.AI_RATE_LIMIT_WINDOW_MS || 86400000));
 
 async function loadIndex() {
   try {
     const dir = join(here, "frontend");
-    const names = (await readdir(dir)).filter(x => x.startsWith("index.html.gz.b64.") && x.endsWith(".part")).sort();
+    const names = (await readdir(dir))
+      .filter(x => x.startsWith("index.html.gz.b64.") && x.endsWith(".part"))
+      .sort();
     if (!names.length) throw new Error("Frontend belum diunggah.");
     let encoded = "";
     for (const name of names) encoded += await readFile(join(dir, name), "utf8");
     return gunzipSync(Buffer.from(encoded, "base64"));
   } catch (error) {
-    console.warn(`Frontend lengkap belum siap: ${error.message}`);
-    return Buffer.from(`<!doctype html><html lang="id"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Spandukin Backend</title><style>body{font:16px system-ui;background:#101820;color:#fff;display:grid;place-items:center;min-height:100vh;margin:0}.card{max-width:680px;background:#18232e;padding:28px;border-radius:18px}b{color:#ffcc00}code{background:#0b1117;padding:3px 7px;border-radius:6px}</style><div class="card"><h1>Spandukin</h1><p><b>Backend aktif.</b> Frontend lengkap sedang disinkronkan dari repository.</p><p>Status AI: <code>/api/status</code></p><p>Health check: <code>/healthz</code></p></div></html>`);
+    console.warn("Frontend lengkap belum siap: " + error.message);
+    return Buffer.from('<!doctype html><html lang="id"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Spandukin Backend</title><style>body{font:16px system-ui;background:#101820;color:#fff;display:grid;place-items:center;min-height:100vh;margin:0}.card{max-width:680px;background:#18232e;padding:28px;border-radius:18px}b{color:#ffcc00}code{background:#0b1117;padding:3px 7px;border-radius:6px}</style><div class="card"><h1>Spandukin</h1><p><b>Backend aktif.</b> Frontend lengkap sedang disinkronkan dari repository.</p><p>Status AI: <code>/api/status</code></p><p>Health check: <code>/healthz</code></p></div></html>');
   }
 }
 
@@ -42,7 +44,10 @@ function security(res) {
 
 function sendJson(res, status, data) {
   const body = JSON.stringify(data);
-  res.writeHead(status, { "Content-Type": "application/json; charset=utf-8", "Content-Length": Buffer.byteLength(body) });
+  res.writeHead(status, {
+    "Content-Type": "application/json; charset=utf-8",
+    "Content-Length": Buffer.byteLength(body)
+  });
   res.end(body);
 }
 
@@ -58,8 +63,9 @@ async function readJson(req, max = 32768) {
     }
     chunks.push(chunk);
   }
-  try { return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}"); }
-  catch {
+  try {
+    return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
+  } catch {
     const e = new Error("Body JSON tidak valid.");
     e.status = 400;
     throw e;
@@ -78,12 +84,18 @@ function takeRate(key) {
   if (!b || now >= b.resetAt) b = { count: 0, resetAt: now + limitWindowMs };
   b.count++;
   buckets.set(key, b);
-  return { allowed: b.count <= limitMax, remaining: Math.max(0, limitMax - b.count), resetAt: b.resetAt };
+  return {
+    allowed: b.count <= limitMax,
+    remaining: Math.max(0, limitMax - b.count),
+    resetAt: b.resetAt
+  };
 }
 
 const HEX = /^#[0-9A-F]{6}$/i;
-const clean = (v, max, fallback) => (String(v ?? "").replace(/\s+/g, " ").trim() || fallback).slice(0, max);
-const color = (v, fallback) => HEX.test(String(v ?? "").trim()) ? String(v).trim().toUpperCase() : fallback;
+const clean = (v, max, fallback) =>
+  (String(v ?? "").replace(/\s+/g, " ").trim() || fallback).slice(0, max);
+const color = (v, fallback) =>
+  HEX.test(String(v ?? "").trim()) ? String(v).trim().toUpperCase() : fallback;
 
 function normalizeConcept(raw) {
   return {
@@ -108,7 +120,7 @@ const schema = {
     accent: { type: "string", description: "Warna aksen hex #RRGGBB" },
     textColor: { type: "string", description: "Warna teks hex #RRGGBB" }
   },
-  required: ["headline","slogan","products","note","background","accent","textColor"],
+  required: ["headline", "slogan", "products", "note", "background", "accent", "textColor"],
   additionalProperties: false
 };
 
@@ -121,19 +133,18 @@ const instructions = [
   "Hasil harus mengikuti schema JSON yang diminta."
 ].join("\n");
 
-function geminiOutputText(data) {
-  if (typeof data?.output_text === "string" && data.output_text.trim()) return data.output_text.trim();
-  const steps = Array.isArray(data?.steps) ? data.steps : [];
-  for (let i = steps.length - 1; i >= 0; i--) {
-    const step = steps[i];
-    if (step?.type !== "model_output") continue;
-    for (const part of step?.content || []) {
-      if (part?.type === "text" && typeof part.text === "string" && part.text.trim()) return part.text.trim();
-    }
+function openAIOutputText(data) {
+  if (typeof data?.output_text === "string" && data.output_text.trim()) {
+    return data.output_text.trim();
   }
-  const outputs = Array.isArray(data?.outputs) ? data.outputs : [];
-  for (let i = outputs.length - 1; i >= 0; i--) {
-    if (outputs[i]?.type === "text" && typeof outputs[i].text === "string" && outputs[i].text.trim()) return outputs[i].text.trim();
+  const output = Array.isArray(data?.output) ? data.output : [];
+  for (const item of output) {
+    const parts = Array.isArray(item?.content) ? item.content : [];
+    for (const part of parts) {
+      if (part?.type === "output_text" && typeof part.text === "string" && part.text.trim()) {
+        return part.text.trim();
+      }
+    }
   }
   return "";
 }
@@ -142,59 +153,102 @@ async function generateConcept(prompt) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   let response;
+
   try {
-    response = await fetch("https://generativelanguage.googleapis.com/v1beta/interactions", {
+    response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
-      headers: { "x-goog-api-key": apiKey, "Content-Type": "application/json" },
+      headers: {
+        "Authorization": "Bearer " + apiKey,
+        "Content-Type": "application/json"
+      },
       body: JSON.stringify({
         model,
-        input: `${instructions}\n\nBrief pengguna:\n${prompt}`,
-        response_format: {
-          type: "text",
-          mime_type: "application/json",
-          schema
+        instructions,
+        input: prompt,
+        store: false,
+        text: {
+          format: {
+            type: "json_schema",
+            name: "spandukin_concept",
+            strict: true,
+            schema
+          }
         }
       }),
       signal: controller.signal
     });
   } catch (err) {
-    const e = new Error(err?.name === "AbortError" ? "Gemini timeout. Coba lagi." : "Backend gagal menghubungi Gemini.");
+    const e = new Error(
+      err?.name === "AbortError"
+        ? "OpenAI timeout. Coba lagi."
+        : "Backend gagal menghubungi OpenAI."
+    );
     e.status = err?.name === "AbortError" ? 504 : 502;
     throw e;
-  } finally { clearTimeout(timer); }
+  } finally {
+    clearTimeout(timer);
+  }
 
   const data = await response.json().catch(() => ({}));
+
   if (!response.ok) {
-    let message = data?.error?.message || "Permintaan ke Gemini gagal.";
-    if (response.status === 400) message = `Konfigurasi Gemini ditolak: ${message}`;
-    if (response.status === 401 || response.status === 403) message = "API key Gemini ditolak.";
-    if (response.status === 429) message = "Kuota gratis Gemini tercapai. Coba lagi setelah kuota tersedia.";
+    let message = data?.error?.message || "Permintaan ke OpenAI gagal.";
+    if (response.status === 400) message = "Konfigurasi OpenAI ditolak: " + message;
+    if (response.status === 401 || response.status === 403) message = "OPENAI_API_KEY ditolak atau tidak memiliki akses.";
+    if (response.status === 429) message = "Kuota atau rate limit OpenAI tercapai. Coba lagi setelah kuota tersedia.";
     const e = new Error(message);
     e.status = response.status >= 500 ? 502 : response.status;
     throw e;
   }
 
-  const text = geminiOutputText(data);
-  if (!text) { const e = new Error("Gemini tidak mengembalikan konsep."); e.status = 502; throw e; }
+  const text = openAIOutputText(data);
+  if (!text) {
+    const e = new Error("OpenAI tidak mengembalikan konsep.");
+    e.status = 502;
+    throw e;
+  }
+
   let parsed;
-  try { parsed = JSON.parse(text); }
-  catch { const e = new Error("Format konsep AI tidak valid."); e.status = 502; throw e; }
-  return { concept: normalizeConcept(parsed), model: data.model || model, provider: aiProvider, usage: data.usage || data.usageMetadata || null };
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    const e = new Error("Format konsep AI tidak valid.");
+    e.status = 502;
+    throw e;
+  }
+
+  return {
+    concept: normalizeConcept(parsed),
+    model: data.model || model,
+    provider: aiProvider,
+    usage: data.usage || null
+  };
 }
 
 const server = http.createServer(async (req, res) => {
   const requestId = crypto.randomUUID();
   security(res);
   res.setHeader("X-Request-Id", requestId);
-  const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
+  const url = new URL(req.url, "http://" + (req.headers.host || "localhost"));
+
   try {
     if (req.method === "GET" && (url.pathname === "/" || url.pathname === "/index.html")) {
-      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Content-Length": indexHtml.length, "Cache-Control": "no-cache" });
+      res.writeHead(200, {
+        "Content-Type": "text/html; charset=utf-8",
+        "Content-Length": indexHtml.length,
+        "Cache-Control": "no-cache"
+      });
       return res.end(indexHtml);
     }
+
     if (req.method === "GET" && url.pathname === "/healthz") {
-      return sendJson(res, 200, { ok: true, service: "spandukin", uptimeSeconds: Math.floor(process.uptime()) });
+      return sendJson(res, 200, {
+        ok: true,
+        service: "spandukin",
+        uptimeSeconds: Math.floor(process.uptime())
+      });
     }
+
     if (req.method === "GET" && url.pathname === "/api/status") {
       return sendJson(res, 200, {
         ok: true,
@@ -209,28 +263,79 @@ const server = http.createServer(async (req, res) => {
         aiLimitWindowMs: limitWindowMs
       });
     }
+
     if (req.method === "POST" && url.pathname === "/api/ai") {
-      if (!apiKey) return sendJson(res, 503, { ok: false, requestId, message: "GEMINI_API_KEY belum dipasang pada backend." });
+      if (!apiKey) {
+        return sendJson(res, 503, {
+          ok: false,
+          requestId,
+          message: "OPENAI_API_KEY belum dipasang pada backend."
+        });
+      }
+
       const ip = clientIp(req);
       const rate = takeRate(ip);
       res.setHeader("X-RateLimit-Limit", String(limitMax));
       res.setHeader("X-RateLimit-Remaining", String(rate.remaining));
-      if (!rate.allowed) return sendJson(res, 429, { ok: false, requestId, message: "Batas pembuatan konsep AI tercapai. Coba lagi setelah periode limit berakhir." });
+
+      if (!rate.allowed) {
+        return sendJson(res, 429, {
+          ok: false,
+          requestId,
+          message: "Batas pembuatan konsep AI tercapai. Coba lagi setelah periode limit berakhir."
+        });
+      }
+
       const body = await readJson(req);
       const prompt = String(body?.prompt ?? "").trim();
-      if (prompt.length < 3 || prompt.length > 2000) return sendJson(res, 400, { ok: false, requestId, message: "Brief harus 3–2.000 karakter." });
+
+      if (prompt.length < 3 || prompt.length > 2000) {
+        return sendJson(res, 400, {
+          ok: false,
+          requestId,
+          message: "Brief harus 3–2.000 karakter."
+        });
+      }
+
       const result = await generateConcept(prompt);
       return sendJson(res, 200, { ok: true, requestId, ...result });
     }
-    return sendJson(res, 404, { ok: false, requestId, message: "Endpoint tidak ditemukan." });
+
+    return sendJson(res, 404, {
+      ok: false,
+      requestId,
+      message: "Endpoint tidak ditemukan."
+    });
   } catch (err) {
     const status = Number.isInteger(err?.status) ? err.status : 500;
-    console.error(JSON.stringify({ requestId, method: req.method, path: url.pathname, status, message: err?.message }));
-    return sendJson(res, status >= 400 && status <= 599 ? status : 500, { ok: false, requestId, message: status === 500 ? "Terjadi kesalahan internal." : err.message });
+    console.error(JSON.stringify({
+      requestId,
+      method: req.method,
+      path: url.pathname,
+      status,
+      message: err?.message
+    }));
+
+    return sendJson(
+      res,
+      status >= 400 && status <= 599 ? status : 500,
+      {
+        ok: false,
+        requestId,
+        message: status === 500 ? "Terjadi kesalahan internal." : err.message
+      }
+    );
   }
 });
 
 server.keepAliveTimeout = 65000;
 server.headersTimeout = 66000;
 server.requestTimeout = 70000;
-server.listen(port, host, () => console.log(`Spandukin aktif di ${host}:${port} | ${aiProvider} ${apiKey ? "aktif" : "belum dikonfigurasi"} | ${model}`));
+
+server.listen(port, host, () => {
+  console.log(
+    "Spandukin aktif di " + host + ":" + port +
+    " | " + aiProvider + " " + (apiKey ? "aktif" : "belum dikonfigurasi") +
+    " | " + model
+  );
+});
