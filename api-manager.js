@@ -155,31 +155,77 @@ export class ApiManager {
     };
   }
 
-  normalizeConcept(raw) {
+  normalizeTemplate(raw, index = 0) {
+    const layouts = ['hero-left', 'hero-right', 'top-band', 'center-stack', 'promo-block', 'photo-focus'];
+    const layout = layouts.includes(String(raw?.layout || '').trim())
+      ? String(raw.layout).trim()
+      : layouts[index % layouts.length];
     return {
+      id: clean(raw?.id, 40, `tpl_${index + 1}`),
+      name: clean(raw?.name, 60, `Template ${index + 1}`),
+      category: clean(raw?.category, 60, 'Spanduk AI'),
       headline: clean(raw?.headline, 80, 'WARUNG'),
       slogan: clean(raw?.slogan, 120, 'Murah • Lengkap • Dekat'),
       products: clean(raw?.products, 180, 'Sembako • Minuman • Kebutuhan Harian'),
-      note: clean(raw?.note, 220, 'Gunakan teks besar dan kontras agar mudah dibaca dari jauh.'),
+      note: clean(raw?.note, 260, 'Gunakan teks besar dan kontras agar mudah dibaca dari jauh.'),
       background: color(raw?.background, '#FFCC00'),
       accent: color(raw?.accent, '#E94235'),
-      textColor: color(raw?.textColor, '#101820')
+      textColor: color(raw?.textColor, '#101820'),
+      layout,
+      photoStyle: clean(raw?.photoStyle, 60, 'product-focus'),
+      shapeStyle: clean(raw?.shapeStyle, 60, 'clean-block')
     };
   }
 
+  normalizeTemplates(raw) {
+    const source = Array.isArray(raw?.templates) ? raw.templates : [];
+    const list = source.slice(0, 6).map((item, index) => this.normalizeTemplate(item, index));
+    while (list.length < 6) {
+      const index = list.length;
+      list.push(this.normalizeTemplate({}, index));
+    }
+    return list;
+  }
+
   schema() {
+    const templateSchema = {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: 'ID unik pendek seperti tpl_1' },
+        name: { type: 'string', description: 'Nama gaya template yang mudah dipahami pengguna' },
+        category: { type: 'string', description: 'Kategori singkat, contoh Warung / Retail atau Kuliner / Promo' },
+        headline: { type: 'string', description: 'Nama usaha atau judul utama paling menonjol' },
+        slogan: { type: 'string', description: 'Pesan utama singkat tanpa mengarang promo' },
+        products: { type: 'string', description: 'Produk atau jasa utama, dipisahkan karakter •' },
+        note: { type: 'string', description: 'Saran layout praktis dan singkat untuk template ini' },
+        background: { type: 'string', description: 'Warna latar hex #RRGGBB' },
+        accent: { type: 'string', description: 'Warna aksen hex #RRGGBB' },
+        textColor: { type: 'string', description: 'Warna teks hex #RRGGBB' },
+        layout: {
+          type: 'string',
+          enum: ['hero-left', 'hero-right', 'top-band', 'center-stack', 'promo-block', 'photo-focus'],
+          description: 'Arketipe layout. Keenam template harus memakai layout yang berbeda.'
+        },
+        photoStyle: { type: 'string', description: 'Arahan singkat penempatan/gaya foto produk' },
+        shapeStyle: { type: 'string', description: 'Arahan singkat bentuk dekoratif atau blok warna' }
+      },
+      required: [
+        'id','name','category','headline','slogan','products','note',
+        'background','accent','textColor','layout','photoStyle','shapeStyle'
+      ],
+      additionalProperties: false
+    };
     return {
       type: 'object',
       properties: {
-        headline: { type: 'string', description: 'Nama usaha atau kategori utama yang paling menonjol' },
-        slogan: { type: 'string', description: 'Pesan utama singkat tanpa mengarang promo' },
-        products: { type: 'string', description: 'Produk atau jasa utama, dipisahkan karakter •' },
-        note: { type: 'string', description: 'Satu saran layout praktis untuk desainer' },
-        background: { type: 'string', description: 'Warna latar hex #RRGGBB' },
-        accent: { type: 'string', description: 'Warna aksen hex #RRGGBB' },
-        textColor: { type: 'string', description: 'Warna teks hex #RRGGBB' }
+        templates: {
+          type: 'array',
+          minItems: 6,
+          maxItems: 6,
+          items: templateSchema
+        }
       },
-      required: ['headline', 'slogan', 'products', 'note', 'background', 'accent', 'textColor'],
+      required: ['templates'],
       additionalProperties: false
     };
   }
@@ -187,11 +233,17 @@ export class ApiManager {
   instructions() {
     return [
       'Anda adalah art director khusus spanduk warung dan UMKM Indonesia.',
+      'Buat tepat 6 template alternatif dari brief pengguna.',
+      'Keenam template harus berbeda secara nyata pada komposisi, hierarki, dan penggunaan warna, tetapi semua informasi usaha harus tetap konsisten.',
+      'Gunakan keenam layout berikut masing-masing tepat satu kali: hero-left, hero-right, top-band, center-stack, promo-block, photo-focus.',
+      'Nama template harus deskriptif dan mudah dipahami, misalnya Modern Minimalis, Promosi Cerah, Fokus Produk, atau Elegan Bersih.',
       'Keluaran harus ringkas, mudah dibaca dari jarak jauh, kontras, dan realistis untuk dicetak.',
       'Gunakan Bahasa Indonesia kecuali brief jelas meminta bahasa lain.',
+      'Jika pengguna menyebut foto produk, beri arahan photoStyle dan note yang sesuai, tetapi jangan mengaku telah melihat isi foto jika hanya nama file yang tersedia.',
       'Jangan mengarang harga, alamat, nomor telepon, diskon, sertifikasi, atau klaim yang tidak ada di brief.',
       'Gunakan kode warna hex #RRGGBB untuk background, accent, dan textColor.',
-      'Hasil harus mengikuti schema JSON yang diminta.'
+      'Setiap template wajib memiliki headline, slogan, products, note, background, accent, textColor, layout, photoStyle, dan shapeStyle.',
+      'Hasil harus mengikuti schema JSON yang diminta tanpa teks tambahan.'
     ].join('\n');
   }
 
@@ -240,7 +292,7 @@ export class ApiManager {
         text: {
           format: {
             type: 'json_schema',
-            name: 'spandukin_concept',
+            name: 'spandukin_templates',
             strict: true,
             schema: this.schema()
           }
@@ -266,10 +318,12 @@ export class ApiManager {
       e.status = 502;
       throw e;
     }
+    const templates = this.normalizeTemplates(parsed);
     return {
       provider: 'openai',
       model: data.model || this.runtime.openaiModel,
-      concept: this.normalizeConcept(parsed),
+      templates,
+      concept: templates[0],
       usage: data.usage || null
     };
   }
@@ -316,10 +370,12 @@ export class ApiManager {
       e.status = 502;
       throw e;
     }
+    const templates = this.normalizeTemplates(parsed);
     return {
       provider: 'gemini',
       model: data.model || this.runtime.geminiModel,
-      concept: this.normalizeConcept(parsed),
+      templates,
+      concept: templates[0],
       usage: data.usage || data.usageMetadata || null
     };
   }
