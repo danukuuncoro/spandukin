@@ -157,9 +157,23 @@ export class ApiManager {
 
   normalizeTemplate(raw, index = 0) {
     const layouts = ['hero-left', 'hero-right', 'top-band', 'center-stack', 'promo-block', 'photo-focus'];
+    const graphicStyles = ['blob-fun', 'geometric-bold', 'promo-badge', 'wave-ribbon', 'confetti', 'clean-modern'];
+    const bgStyles = ['gradient-diagonal', 'gradient-radial', 'split-color', 'solid-with-pattern', 'soft-gradient', 'bold-contrast'];
+    const densities = ['low', 'medium', 'high'];
+
     const layout = layouts.includes(String(raw?.layout || '').trim())
       ? String(raw.layout).trim()
       : layouts[index % layouts.length];
+    const graphicStyle = graphicStyles.includes(String(raw?.graphicStyle || '').trim())
+      ? String(raw.graphicStyle).trim()
+      : graphicStyles[index % graphicStyles.length];
+    const bgStyle = bgStyles.includes(String(raw?.bgStyle || '').trim())
+      ? String(raw.bgStyle).trim()
+      : bgStyles[index % bgStyles.length];
+    const decorationDensity = densities.includes(String(raw?.decorationDensity || '').trim())
+      ? String(raw.decorationDensity).trim()
+      : (index % 3 === 0 ? 'high' : 'medium');
+
     return {
       id: clean(raw?.id, 40, `tpl_${index + 1}`),
       name: clean(raw?.name, 60, `Template ${index + 1}`),
@@ -167,13 +181,18 @@ export class ApiManager {
       headline: clean(raw?.headline, 80, 'WARUNG'),
       slogan: clean(raw?.slogan, 120, 'Murah • Lengkap • Dekat'),
       products: clean(raw?.products, 180, 'Sembako • Minuman • Kebutuhan Harian'),
-      note: clean(raw?.note, 260, 'Gunakan teks besar dan kontras agar mudah dibaca dari jauh.'),
+      note: clean(raw?.note, 280, 'Gunakan teks besar, kontras, foto produk, dan elemen grafis dekoratif agar menarik dilihat dari jauh.'),
       background: color(raw?.background, '#FFCC00'),
-      accent: color(raw?.accent, '#E94235'),
+      accent: color(raw?.accent, '#16A34A'),
+      accent2: color(raw?.accent2, '#EF4444'),
       textColor: color(raw?.textColor, '#101820'),
       layout,
-      photoStyle: clean(raw?.photoStyle, 60, 'product-focus'),
-      shapeStyle: clean(raw?.shapeStyle, 60, 'clean-block')
+      bgStyle,
+      graphicStyle,
+      decorationDensity,
+      highlightText: clean(raw?.highlightText, 60, index % 2 ? 'TERLARIS' : 'PILIHAN FAVORIT'),
+      photoStyle: clean(raw?.photoStyle, 80, 'product-focus'),
+      shapeStyle: clean(raw?.shapeStyle, 80, 'playful-decor')
     };
   }
 
@@ -197,21 +216,39 @@ export class ApiManager {
         headline: { type: 'string', description: 'Nama usaha atau judul utama paling menonjol' },
         slogan: { type: 'string', description: 'Pesan utama singkat tanpa mengarang promo' },
         products: { type: 'string', description: 'Produk atau jasa utama, dipisahkan karakter •' },
-        note: { type: 'string', description: 'Saran layout praktis dan singkat untuk template ini' },
+        note: { type: 'string', description: 'Saran layout dan grafis praktis untuk template ini' },
         background: { type: 'string', description: 'Warna latar hex #RRGGBB' },
-        accent: { type: 'string', description: 'Warna aksen hex #RRGGBB' },
+        accent: { type: 'string', description: 'Warna aksen utama hex #RRGGBB' },
+        accent2: { type: 'string', description: 'Warna aksen kedua hex #RRGGBB' },
         textColor: { type: 'string', description: 'Warna teks hex #RRGGBB' },
         layout: {
           type: 'string',
           enum: ['hero-left', 'hero-right', 'top-band', 'center-stack', 'promo-block', 'photo-focus'],
           description: 'Arketipe layout. Keenam template harus memakai layout yang berbeda.'
         },
-        photoStyle: { type: 'string', description: 'Arahan singkat penempatan/gaya foto produk' },
+        bgStyle: {
+          type: 'string',
+          enum: ['gradient-diagonal', 'gradient-radial', 'split-color', 'solid-with-pattern', 'soft-gradient', 'bold-contrast'],
+          description: 'Gaya latar belakang template'
+        },
+        graphicStyle: {
+          type: 'string',
+          enum: ['blob-fun', 'geometric-bold', 'promo-badge', 'wave-ribbon', 'confetti', 'clean-modern'],
+          description: 'Gaya grafis dekoratif yang memberi rasa template editor desain modern'
+        },
+        decorationDensity: {
+          type: 'string',
+          enum: ['low', 'medium', 'high'],
+          description: 'Kepadatan dekorasi grafis'
+        },
+        highlightText: { type: 'string', description: 'Teks badge atau label kecil, tanpa mengarang diskon/harga' },
+        photoStyle: { type: 'string', description: 'Arahan singkat penempatan dan gaya foto produk' },
         shapeStyle: { type: 'string', description: 'Arahan singkat bentuk dekoratif atau blok warna' }
       },
       required: [
         'id','name','category','headline','slogan','products','note',
-        'background','accent','textColor','layout','photoStyle','shapeStyle'
+        'background','accent','accent2','textColor','layout','bgStyle',
+        'graphicStyle','decorationDensity','highlightText','photoStyle','shapeStyle'
       ],
       additionalProperties: false
     };
@@ -234,15 +271,20 @@ export class ApiManager {
     return [
       'Anda adalah art director khusus spanduk warung dan UMKM Indonesia.',
       'Buat tepat 6 template alternatif dari brief pengguna.',
-      'Keenam template harus berbeda secara nyata pada komposisi, hierarki, dan penggunaan warna, tetapi semua informasi usaha harus tetap konsisten.',
+      'Semua template harus terasa berwarna, modern, atraktif, dan kaya grafis seperti template editor desain online; hindari hasil polos atau terlalu kosong.',
+      'Keenam template harus berbeda nyata dalam komposisi, palet, background, gaya grafis, dan penggunaan foto, tetapi data usaha tetap konsisten.',
       'Gunakan keenam layout berikut masing-masing tepat satu kali: hero-left, hero-right, top-band, center-stack, promo-block, photo-focus.',
-      'Nama template harus deskriptif dan mudah dipahami, misalnya Modern Minimalis, Promosi Cerah, Fokus Produk, atau Elegan Bersih.',
-      'Keluaran harus ringkas, mudah dibaca dari jarak jauh, kontras, dan realistis untuk dicetak.',
+      'Gunakan keenam graphicStyle berikut masing-masing tepat satu kali: blob-fun, geometric-bold, promo-badge, wave-ribbon, confetti, clean-modern.',
+      'Variasikan bgStyle di antara gradient-diagonal, gradient-radial, split-color, solid-with-pattern, soft-gradient, dan bold-contrast.',
+      'Gunakan 2 sampai 3 warna yang kontras tetapi harmonis. accent2 harus benar-benar berbeda dari accent.',
+      'Setidaknya 3 dari 6 template harus memakai decorationDensity high agar hasil promo terasa hidup.',
+      'Gunakan highlightText hanya untuk label netral seperti TERLARIS, FAVORIT, PILIHAN HARI INI, MENU UTAMA; jangan mengarang diskon, harga, atau klaim faktual.',
+      'Nama template harus deskriptif seperti Promo Cerah, Blob Modern, Fokus Produk, Geometris Berani, atau Minimalis Premium.',
+      'Keluaran harus mudah dibaca dari jarak jauh, realistis untuk dicetak, dan tetap memiliki ruang napas.',
       'Gunakan Bahasa Indonesia kecuali brief jelas meminta bahasa lain.',
       'Jika pengguna menyebut foto produk, beri arahan photoStyle dan note yang sesuai, tetapi jangan mengaku telah melihat isi foto jika hanya nama file yang tersedia.',
       'Jangan mengarang harga, alamat, nomor telepon, diskon, sertifikasi, atau klaim yang tidak ada di brief.',
-      'Gunakan kode warna hex #RRGGBB untuk background, accent, dan textColor.',
-      'Setiap template wajib memiliki headline, slogan, products, note, background, accent, textColor, layout, photoStyle, dan shapeStyle.',
+      'Gunakan kode warna hex #RRGGBB untuk background, accent, accent2, dan textColor.',
       'Hasil harus mengikuti schema JSON yang diminta tanpa teks tambahan.'
     ].join('\n');
   }
