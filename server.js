@@ -13,6 +13,9 @@ const api = new ApiManager(process.env);
 
 async function loadIndex() {
   try {
+    return await readFile(join(here, 'frontend', 'index.html'));
+  } catch {}
+  try {
     const dir = join(here, 'frontend');
     const names = (await readdir(dir))
       .filter(x => x.startsWith('index.html.gz.b64.') && x.endsWith('.part'))
